@@ -1,0 +1,103 @@
+# worktree-tui configuration file
+# Location: ~/.config/worktree-tui/config.toml (Linux/macOS)
+#           %APPDATA%\worktree-tui\config.toml (Windows)
+
+# Copy this file to the config directory and edit as needed.
+# The tool will create a default config on first run if none exists.
+
+[[keybindings]]
+key = "q"
+action = "quit"
+
+[[keybindings]]
+key = "Q"
+action = "quit_force"
+
+[[keybindings]]
+key = "j"
+action = "move_down"
+
+[[keybindings]]
+key = "k"
+action = "move_up"
+
+[[keybindings]]
+key = "h"
+action = "move_left"
+
+[[keybindings]]
+key = "l"
+action = "move_right"
+
+[[keybindings]]
+key = "J"
+action = "scroll_page_down"
+
+[[keybindings]]
+key = "K"
+action = "scroll_page_up"
+
+[[keybindings]]
+key = "g"
+action = "go_top"
+
+[[keybindings]]
+key = "G"
+action = "go_bottom"
+
+[[keybindings]]
+key = "Enter"
+action = "select"
+
+[[keybindings]]
+key = " "
+action = "toggle"
+
+[[keybindings]]
+key = "a"
+action = "add_worktree"
+
+[[keybindings]]
+key = "d"
+action = "remove_worktree"
+
+[[keybindings]]
+key = "r"
+action = "refresh"
+
+[[keybindings]]
+key = "s"
+action = "switch_tab"
+
+[[keybindings]]
+key = "?"
+action = "help"
+
+[[keybindings]]
+key = "Esc"
+action = "back"
+
+# Example: custom keybinding with modifiers
+# [[keybindings]]
+# key = "c"
+# modifiers = ["Control"]
+# action = "copy_path"
+
+# Example: vim-style page navigation
+# [[keybindings]]
+# key = "Ctrl+d"
+# action = "scroll_page_down"
+
+[theme]
+base = "#1e1e2e"
+surface = "#181825"
+border = "#585b70"
+text = "#cdd6f4"
+muted = "#a6adc8"
+highlight = "#cba6f7"
+selected = "#313244"
+active = "#89b4fa"
+success = "#a6e3a1"
+warning = "#f9e2af"
+error = "#f38ba8"
+title = "#f5c2e7"

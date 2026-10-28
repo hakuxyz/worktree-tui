@@ -1,0 +1,10 @@
+/target/
+/**/*.rs.bak
+*.toml.bak
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+assets/*.gif
+assets/screenshots/*.png
