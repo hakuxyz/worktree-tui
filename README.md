@@ -15,23 +15,23 @@ Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/r
   </tr>
   <tr>
     <td>
-      <img src="https://raw.githubusercontent.com/hakuxyz/worktree-tui/main/assets/screenshots/list-view.png" alt="Worktree list view" width="400"/>
+      <img src="assets/screenshots/list-view.png" alt="Worktree list view" width="400"/>
     </td>
     <td>
-      <img src="https://raw.githubusercontent.com/hakuxyz/worktree-tui/main/assets/screenshots/split-view.png" alt="Split view with details panel" width="400"/>
+      <img src="assets/screenshots/split-view.png" alt="Split view with details panel" width="400"/>
     </td>
   </tr>
 </table>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/hakuxyz/worktree-tui/main/assets/demo.gif">
-    <img src="https://raw.githubusercontent.com/hakuxyz/worktree-tui/main/assets/demo.gif" alt="worktree-tui demo GIF" width="600"/>
+  <a href="assets/demo.gif">
+    <img src="assets/demo.gif" alt="worktree-tui demo GIF" width="600"/>
   </a>
   <br/>
   <em>Click above to view the full demo recording</em>
 </p>
 
-> 💡 Add your own screenshots/GIFs under `assets/screenshots/` and `assets/demo.gif`, then update the paths above.
+> 💡 Replace these demo assets with your own recordings under `assets/screenshots/` and `assets/demo.gif`.
 
 ---
 

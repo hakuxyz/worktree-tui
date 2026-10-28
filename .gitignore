@@ -6,5 +6,3 @@
 *.swp
 *.swo
 .DS_Store
-assets/*.gif
-assets/screenshots/*.png
