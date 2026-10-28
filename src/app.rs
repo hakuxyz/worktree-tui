@@ -1,6 +1,9 @@
 use crate::config::Config;
-use crossterm::event::{KeyEvent, MouseEvent};
+use crate::git::Git;
+use crossterm::event::{KeyEvent, KeyModifiers, MouseEvent, MouseButton, MouseEventKind};
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Application-level state shared across panels.
 #[derive(Debug, Clone)]
@@ -9,6 +12,7 @@ pub struct App {
     pub show_help: bool,
     pub active_tab: Tab,
     pub worktrees: Vec<Worktree>,
+    pub branches: Vec<String>,
     pub selected_index: usize,
     pub scroll_offset: usize,
     pub status_message: Option<StatusMessage>,
@@ -16,6 +20,8 @@ pub struct App {
     pub config: Config,
     pub width: u16,
     pub height: u16,
+    pub git: Option<Arc<Mutex<Git>>>,
+    pub next_task_id: TaskId,
 }
 
 impl App {
@@ -25,6 +31,7 @@ impl App {
             show_help: false,
             active_tab: Tab::Worktrees,
             worktrees: Vec::new(),
+            branches: Vec::new(),
             selected_index: 0,
             scroll_offset: 0,
             status_message: None,
@@ -32,7 +39,14 @@ impl App {
             config,
             width: 80,
             height: 24,
+            git: None,
+            next_task_id: 0,
         }
+    }
+
+    pub fn with_git(mut self, repo_path: impl Into<std::path::PathBuf>) -> Self {
+        self.git = Some(Arc::new(Mutex::new(Git::new(repo_path))));
+        self
     }
 
     pub fn set_dimensions(&mut self, width: u16, height: u16) {
@@ -48,8 +62,15 @@ impl App {
         self.status_message = Some(StatusMessage { kind, message: message.into() });
     }
 
-    pub fn add_task(&mut self, id: TaskId) {
+    pub fn clear_status(&mut self) {
+        self.status_message = None;
+    }
+
+    pub fn add_task(&mut self) -> TaskId {
+        let id = self.next_task_id;
+        self.next_task_id += 1;
         self.pending_tasks.insert(id, TaskStatus::Running);
+        id
     }
 
     pub fn complete_task(&mut self, id: TaskId, success: bool) {
@@ -89,7 +110,10 @@ impl App {
         if visible == 0 {
             return;
         }
-        self.selected_index = self.selected_index.saturating_add(visible).min(self.worktrees.len().saturating_sub(1));
+        self.selected_index = self
+            .selected_index
+            .saturating_add(visible)
+            .min(self.worktrees.len().saturating_sub(1));
         self.scroll_to_selected();
     }
 
@@ -142,6 +166,36 @@ impl App {
             Tab::Branches => Tab::Status,
             Tab::Status => Tab::Worktrees,
         };
+    }
+
+    pub fn handle_mouse(&mut self, mouse: MouseEvent) {
+        match mouse.kind {
+            MouseEventKind::ScrollUp => {
+                for _ in 0..3 {
+                    self.previous();
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                for _ in 0..3 {
+                    self.next();
+                }
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                // Click in the list panel area (left ~50%).
+                if mouse.column < self.width.saturating_div(2) {
+                    let row = mouse.row as usize;
+                    if row >= 4 {
+                        // Account for header chrome (~4 rows).
+                        let idx = self.scroll_offset.saturating_add(row.saturating_sub(4));
+                        if idx < self.worktrees.len() {
+                            self.selected_index = idx;
+                            self.scroll_to_selected();
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -291,8 +345,8 @@ impl InputHandler {
         }
     }
 
-    pub fn handle_mouse(&self, _app: &mut App, _mouse: MouseEvent) {
-        // placeholder for future mouse support
+    pub fn handle_mouse(&self, app: &mut App, mouse: MouseEvent) {
+        app.handle_mouse(mouse);
     }
 }
 
@@ -300,16 +354,16 @@ trait ModifiersExt {
     fn modifiers_to_strings(&self) -> Vec<String>;
 }
 
-impl ModifiersExt for crossterm::event::KeyModifiers {
+impl ModifiersExt for KeyModifiers {
     fn modifiers_to_strings(&self) -> Vec<String> {
         let mut out = Vec::new();
-        if self.contains(crossterm::event::KeyModifiers::SHIFT) {
+        if self.contains(KeyModifiers::SHIFT) {
             out.push("Shift".into());
         }
-        if self.contains(crossterm::event::KeyModifiers::CONTROL) {
+        if self.contains(KeyModifiers::CONTROL) {
             out.push("Control".into());
         }
-        if self.contains(crossterm::event::KeyModifiers::ALT) {
+        if self.contains(KeyModifiers::ALT) {
             out.push("Alt".into());
         }
         out
@@ -337,5 +391,45 @@ fn key_to_string(key: &KeyEvent) -> String {
         crossterm::event::KeyCode::Esc => "Esc".into(),
         crossterm::event::KeyCode::Char(c) => c.to_string(),
         _ => "Unknown".into(),
+    }
+}
+
+impl Worktree {
+    pub fn demo() -> Vec<Self> {
+        vec![
+            Self {
+                id: "main".into(),
+                path: "/home/admin/project".into(),
+                branch: "main".into(),
+                commit: "a1b2c3d".into(),
+                is_locked: false,
+                is_main: true,
+                commit_date: Some("2026-10-28".into()),
+                ahead: 0,
+                behind: 0,
+            },
+            Self {
+                id: "feature-auth".into(),
+                path: "/home/admin/project-wt-auth".into(),
+                branch: "feature/auth".into(),
+                commit: "d4e5f6a".into(),
+                is_locked: false,
+                is_main: false,
+                commit_date: Some("2026-10-27".into()),
+                ahead: 3,
+                behind: 1,
+            },
+            Self {
+                id: "bugfix-header".into(),
+                path: "/home/admin/project-wt-fix".into(),
+                branch: "bugfix/header".into(),
+                commit: "9f8e7d6".into(),
+                is_locked: true,
+                is_main: false,
+                commit_date: Some("2026-10-26".into()),
+                ahead: 0,
+                behind: 5,
+            },
+        ]
     }
 }

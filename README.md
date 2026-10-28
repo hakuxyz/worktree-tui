@@ -31,7 +31,7 @@ Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/r
   <em>Click above to view the full demo recording</em>
 </p>
 
-> 💡 Replace these demo assets with your own recordings under `assets/screenshots/` and `assets/demo.gif`.
+
 
 ---
 
@@ -40,16 +40,72 @@ Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/r
 | Feature | Status |
 |---------|--------|
 | Interactive worktree browser | ✅ |
-| Split-pane layout (list + details) | ✅ |
+| Split-pane layout (list + details panel) | ✅ |
 | Catppuccin Mocha theme | ✅ |
 | TOML-configurable keybindings | ✅ |
 | Async Git operations (non-blocking UI) | ✅ |
 | Responsive terminal resize | ✅ |
+| Mouse support (click to select, scroll) | ✅ |
 | Multi-tab navigation (Worktrees / Branches / Status) | ✅ |
-| Git integration (add/remove/switch worktrees) | 🚧 |
+| Git worktree list (`git worktree list --porcelain`) | ✅ |
+| Git worktree remove (`git worktree remove`) | ✅ |
+| Git worktree add (manual + refresh) | ✅ |
+| Branch browser tab | 🚧 |
+| Git status tab | 🚧 |
 | Custom themes | 🚧 |
+| Config hot-reload | 🚧 |
 | Plugin system | 📋 |
 | SSH/Git host integration | 📋 |
+
+### Implemented keybindings
+
+| Key | Action |
+|-----|--------|
+| `q` / `Q` | Quit / force quit |
+| `j` / `k` | Move down / up |
+| `h` / `l` | Move focus left / right |
+| `J` / `K` | Page down / up |
+| `g` / `G` | Go to top / bottom |
+| `Enter` | Select worktree |
+| `Space` | Toggle selection |
+| `a` | Add new worktree (placeholder) |
+| `d` | Remove selected worktree |
+| `r` | Refresh worktree list from git |
+| `s` | Switch tab |
+| `?` | Toggle help overlay |
+| `Esc` | Back / cancel |
+| Mouse click | Select worktree in list |
+| Mouse scroll | Scroll worktree list |
+
+### Example config
+
+Configuration lives at `~/.config/worktree-tui/config.toml`. A default is generated on first launch:
+
+```toml
+[[keybindings]]
+key = "q"
+action = "quit"
+
+[[keybindings]]
+key = "j"
+action = "move_down"
+
+# ... more bindings
+
+[theme]
+base = "#1e1e2e"
+surface = "#181825"
+border = "#585b70"
+text = "#cdd6f4"
+muted = "#a6adc8"
+highlight = "#cba6f7"
+selected = "#313244"
+active = "#89b4fa"
+success = "#a6e3a1"
+warning = "#f9e2af"
+error = "#f38ba8"
+title = "#f5c2e7"
+```
 
 ---
 
@@ -169,6 +225,7 @@ worktree-tui/
 │   ├── app.rs              # Application state, Worktree model, InputHandler
 │   ├── config.rs           # TOML config loading/saving, KeyBinding
 │   ├── event.rs            # Async event loop (tokio + crossterm + mpsc)
+│   ├── git.rs              # Async git CLI wrapper
 │   ├── theme.rs            # Catppuccin palette & Theme struct
 │   └── ui.rs               # ratatui layout & widget rendering
 └── assets/
@@ -184,6 +241,7 @@ worktree-tui/
 | `src/app.rs` | `App` state, `Worktree` model, `Tab` enum, `Action` enum, `InputHandler` |
 | `src/config.rs` | `Config` (keybindings + theme), TOML serialize/deserialize, config path resolution |
 | `src/event.rs` | `EventLoop` — async event loop, mpsc channel, terminal setup/teardown |
+| `src/git.rs` | Async `git` CLI wrapper (worktree list/add/remove/branch/status) |
 | `src/theme.rs` | `Theme` struct, Catppuccin Mocha `palette` constants |
 | `src/ui.rs` | `draw()` — header, body (split list + preview), footer rendering |
 
@@ -218,11 +276,13 @@ The UI runs on a dedicated tokio task. Crossterm events (key, mouse, resize) are
 - [x] Catppuccin theme & responsive layout
 - [x] TOML keybinding configuration
 - [x] Worktree list + details panels
-- [ ] Git worktree CRUD (`git worktree add/remove/list`)
+- [x] Git worktree list (`git worktree list --porcelain`)
+- [x] Git worktree remove (`git worktree remove`)
+- [x] Git worktree add (placeholder + refresh)
+- [x] Mouse support (click to select, scroll)
 - [ ] Branch browser tab
 - [ ] Git status tab
 - [ ] Custom theme support (load from config)
-- [ ] Mouse support (click to select, scroll)
 - [ ] Config validation & hot-reload
 - [ ] Plugin system for custom commands
 - [ ] SSH remote integration
