@@ -1,5 +1,7 @@
 # worktree-tui
 
+[![CI](https://github.com/hakuxyz/worktree-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/hakuxyz/worktree-tui/actions/workflows/ci.yml)
+
 A high-performance, beautiful Terminal User Interface for managing Git worktrees, inspired by [lazygit](https://github.com/jesseduffield/lazygit).
 
 Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/ratatui), [crossterm](https://github.com/crossterm-rs/crossterm), and [tokio](https://tokio.rs).
@@ -50,9 +52,9 @@ Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/r
 | Git worktree list (`git worktree list --porcelain`) | ✅ |
 | Git worktree remove (`git worktree remove`) | ✅ |
 | Git worktree add (manual + refresh) | ✅ |
-| Branch browser tab | 🚧 |
-| Git status tab | 🚧 |
-| Custom themes | 🚧 |
+| Branch browser tab | ✅ |
+| Git status tab | ✅ |
+| Custom themes (load from config.toml) | ✅ |
 | Config hot-reload | 🚧 |
 | Plugin system | 📋 |
 | SSH/Git host integration | 📋 |
@@ -280,13 +282,13 @@ The UI runs on a dedicated tokio task. Crossterm events (key, mouse, resize) are
 - [x] Git worktree remove (`git worktree remove`)
 - [x] Git worktree add (placeholder + refresh)
 - [x] Mouse support (click to select, scroll)
-- [ ] Branch browser tab
-- [ ] Git status tab
-- [ ] Custom theme support (load from config)
+- [x] Branch browser tab
+- [x] Git status tab
+- [x] Custom theme support (load from config.toml)
+- [x] GitHub Actions CI/CD pipeline
 - [ ] Config validation & hot-reload
 - [ ] Plugin system for custom commands
 - [ ] SSH remote integration
-- [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Crates.io publication
 
 ---

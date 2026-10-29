@@ -1,3 +1,6 @@
+use crate::theme::{Theme, palette};
+use ratatui::prelude::Stylize;
+use ratatui::style::Style;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -124,6 +127,49 @@ pub struct ThemeConfig {
     pub warning: String,
     pub error: String,
     pub title: String,
+}
+
+impl ThemeConfig {
+    pub fn to_theme(&self) -> Theme {
+        Theme {
+            base: style_from_hex(&self.base, palette::TEXT),
+            surface: style_from_hex(&self.surface, palette::TEXT),
+            border: Style::new().fg(parse_hex(&self.border).unwrap_or(palette::SURFACE2)),
+            text: Style::new().fg(parse_hex(&self.text).unwrap_or(palette::TEXT)),
+            muted: Style::new().fg(parse_hex(&self.muted).unwrap_or(palette::SUBTEXT0)),
+            highlight: Style::new().fg(parse_hex(&self.highlight).unwrap_or(palette::LAVENDER)).bold(),
+            selected: Style::new()
+                .bg(parse_hex(&self.selected).unwrap_or(palette::SURFACE0))
+                .fg(palette::TEXT)
+                .bold(),
+            active: Style::new()
+                .bg(parse_hex(&self.active).unwrap_or(palette::BLUE))
+                .fg(palette::BASE)
+                .bold(),
+            success: Style::new().fg(parse_hex(&self.success).unwrap_or(palette::GREEN)),
+            warning: Style::new().fg(parse_hex(&self.warning).unwrap_or(palette::YELLOW)),
+            error: Style::new().fg(parse_hex(&self.error).unwrap_or(palette::RED)),
+            title: Style::new().fg(parse_hex(&self.title).unwrap_or(palette::PINK)).bold(),
+        }
+    }
+}
+
+fn parse_hex(hex: &str) -> Option<ratatui::style::Color> {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some(ratatui::style::Color::Rgb(r, g, b))
+}
+
+fn style_from_hex(hex: &str, fallback_fg: ratatui::style::Color) -> ratatui::style::Style {
+    match parse_hex(hex) {
+        Some(color) => ratatui::style::Style::new().bg(color).fg(fallback_fg),
+        None => ratatui::style::Style::new(),
+    }
 }
 
 impl Default for ThemeConfig {

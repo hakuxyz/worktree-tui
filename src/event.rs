@@ -1,5 +1,6 @@
 use crate::app::{Action, App, InputHandler};
 use crate::git::Git;
+use crate::theme::Theme;
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, MouseEvent};
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::{execute, terminal};
@@ -33,12 +34,14 @@ pub struct EventLoop {
     running: Arc<AtomicBool>,
     input_handle: Option<JoinHandle<anyhow::Result<()>>>,
     git: Option<Arc<Mutex<Git>>>,
+    theme: Theme,
     next_task_id: u64,
 }
 
 impl EventLoop {
     pub fn new(
         git: Option<Arc<Mutex<Git>>>,
+        theme: Theme,
     ) -> anyhow::Result<(Self, Terminal<CrosstermBackend<Stdout>>, mpsc::UnboundedReceiver<AppEvent>)> {
         terminal::enable_raw_mode()?;
         let mut stdout = stdout();
@@ -110,6 +113,7 @@ impl EventLoop {
             running,
             input_handle,
             git,
+            theme,
             next_task_id: 0,
         };
         Ok((this, terminal, rx))
@@ -123,6 +127,7 @@ impl EventLoop {
         mut rx: mpsc::UnboundedReceiver<AppEvent>,
     ) -> anyhow::Result<()> {
         let git = self.git.clone();
+        let theme = self.theme.clone();
 
         while let Some(event) = rx.recv().await {
             match event {
@@ -151,7 +156,7 @@ impl EventLoop {
                 }
                 AppEvent::Tick => {}
                 AppEvent::Render => {
-                    self.draw(&mut terminal, &app)?;
+                    self.draw(&mut terminal, &app, &theme)?;
                 }
                 AppEvent::GitTaskDone { id, success, message } => {
                     app.complete_task(id, success);
@@ -318,8 +323,9 @@ async fn handle_action(
         &self,
         terminal: &mut Terminal<CrosstermBackend<Stdout>>,
         app: &App,
+        theme: &Theme,
     ) -> anyhow::Result<()> {
-        terminal.draw(|frame| crate::ui::draw(frame, app))?;
+        terminal.draw(|frame| crate::ui::draw(frame, app, theme))?;
         Ok(())
     }
 

@@ -13,6 +13,7 @@ pub struct App {
     pub active_tab: Tab,
     pub worktrees: Vec<Worktree>,
     pub branches: Vec<String>,
+    pub git_status: Option<GitStatus>,
     pub selected_index: usize,
     pub scroll_offset: usize,
     pub status_message: Option<StatusMessage>,
@@ -32,6 +33,7 @@ impl App {
             active_tab: Tab::Worktrees,
             worktrees: Vec::new(),
             branches: Vec::new(),
+            git_status: None,
             selected_index: 0,
             scroll_offset: 0,
             status_message: None,
@@ -227,6 +229,18 @@ pub struct Worktree {
     pub commit_date: Option<String>,
     pub ahead: usize,
     pub behind: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitStatusFile {
+    pub status: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitStatus {
+    pub current_branch: String,
+    pub files: Vec<GitStatusFile>,
 }
 
 #[derive(Debug, Clone)]

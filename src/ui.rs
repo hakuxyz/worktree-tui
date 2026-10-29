@@ -7,9 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, BorderType};
 use ratatui::Frame;
 
-pub fn draw(frame: &mut Frame, app: &App) {
-    let theme = Theme::default();
-
+pub fn draw(frame: &mut Frame, app: &App, theme: &Theme) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -19,9 +17,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         ])
         .split(frame.area());
 
-    draw_header(frame, main_chunks[0], app, &theme);
-    draw_body(frame, main_chunks[1], app, &theme);
-    draw_footer(frame, main_chunks[2], app, &theme);
+    draw_header(frame, main_chunks[0], app, theme);
+    draw_body(frame, main_chunks[1], app, theme);
+    draw_footer(frame, main_chunks[2], app, theme);
 }
 
 fn draw_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -65,17 +63,22 @@ fn draw_header(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 }
 
 fn draw_body(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
-    // Split body into list panel (left) and preview panel (right).
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ])
-        .split(area);
-
-    draw_worktree_list(frame, chunks[0], app, theme);
-    draw_preview(frame, chunks[1], app, theme);
+    match app.active_tab {
+        Tab::Worktrees => {
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(area);
+            draw_worktree_list(frame, chunks[0], app, theme);
+            draw_details_panel(frame, chunks[1], app, theme);
+        }
+        Tab::Branches => {
+            draw_branch_list(frame, area, app, theme);
+        }
+        Tab::Status => {
+            draw_status_panel(frame, area, app, theme);
+        }
+    }
 }
 
 fn draw_worktree_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
@@ -87,7 +90,7 @@ fn draw_worktree_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .style(theme.surface)
-        .border_style(if app.active_tab == Tab::Worktrees { theme.active } else { theme.border });
+        .border_style(theme.active);
 
     let items: Vec<ListItem> = app
         .visible_worktrees()
@@ -140,7 +143,7 @@ fn draw_worktree_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     frame.render_stateful_widget(list, area, &mut list_state);
 }
 
-fn draw_preview(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+fn draw_details_panel(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let block = Block::default()
         .title(Line::from(vec![
             Span::styled(" Details ", theme.title),
@@ -188,6 +191,104 @@ fn draw_preview(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     frame.render_widget(paragraph, inner);
 }
 
+fn draw_branch_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" Branches ", theme.title),
+            Span::styled(format!(" ({})", app.branches.len()), theme.muted),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(theme.surface)
+        .border_style(theme.active);
+
+    let items: Vec<ListItem> = app
+        .branches
+        .iter()
+        .enumerate()
+        .map(|(i, branch)| {
+            let selected = i == app.selected_index;
+            let style = if selected {
+                theme.selected
+            } else {
+                theme.text
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled("●  ", style),
+                Span::styled(branch.as_str(), style.add_modifier(Modifier::BOLD)),
+            ]))
+        })
+        .collect();
+
+    let mut list_state = ListState::default();
+    if !app.branches.is_empty() {
+        list_state.select(Some(app.selected_index));
+    }
+
+    let list = List::new(items)
+        .block(block)
+        .highlight_style(theme.selected)
+        .highlight_symbol("▶ ");
+
+    frame.render_stateful_widget(list, area, &mut list_state);
+}
+
+fn draw_status_panel(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" Git Status ", theme.title),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(theme.surface)
+        .border_style(theme.border);
+
+    let inner = area.inner(Margin {
+        vertical: 1,
+        horizontal: 1,
+    });
+
+    let content = match &app.git_status {
+        Some(status) => {
+            let mut lines = vec![
+                Line::from(Span::styled("Branch:  ", theme.muted) + Span::styled(&status.current_branch, theme.text)),
+                Line::from(""),
+            ];
+            if status.files.is_empty() {
+                lines.push(Line::from(Span::styled("Working tree clean", theme.success)));
+            } else {
+                for f in &status.files {
+                    let (icon, color) = match f.status.as_str() {
+                        "M" => (" M", theme.warning),
+                        "A" => (" A", theme.success),
+                        "D" => (" D", theme.error),
+                        "??" => ("??", theme.muted),
+                        _ => ("  ", theme.text),
+                    };
+                    lines.push(Line::from(vec![
+                        Span::styled(icon, color),
+                        Span::styled(format!("  {}", f.path), theme.text),
+                    ]));
+                }
+            }
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled("Press 'r' to refresh", theme.muted)));
+            lines
+        }
+        None => {
+            vec![
+                Line::from(Span::styled("No status available.", theme.muted)),
+                Line::from(Span::styled("Press 'r' to refresh.", theme.muted)),
+            ]
+        }
+    };
+
+    frame.render_widget(block, area);
+    let paragraph = Paragraph::new(content).alignment(Alignment::Left);
+    frame.render_widget(paragraph, inner);
+}
+
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let help = if app.show_help {
         " q:quit  j/k:move  g/G:top-bottom  ?:help  a:add  d:remove  r:refresh  s:tab  Esc:back "
@@ -197,6 +298,12 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
     let status_text = match &app.status_message {
         Some(msg) => {
+            let style = match msg.kind {
+                crate::app::StatusKind::Info => theme.text,
+                crate::app::StatusKind::Success => theme.success,
+                crate::app::StatusKind::Warning => theme.warning,
+                crate::app::StatusKind::Error => theme.error,
+            };
             format!(" {} │ {}", msg.message, help)
         }
         None => help.to_string(),

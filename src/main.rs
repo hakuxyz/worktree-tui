@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
     init_logging();
 
     let config = Config::load().unwrap_or_default();
+    let theme = config.theme.to_theme();
 
     // Determine the repo path: use current dir, or first arg.
     let repo_path = std::env::args().nth(1).unwrap_or_else(|| ".".to_string());
@@ -38,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
     let handler = app::InputHandler::new(app.config.clone());
 
     let git = app.git.clone();
-    let (event_loop, mut terminal, rx) = EventLoop::new(git)?;
+    let (event_loop, mut terminal, rx) = EventLoop::new(git, theme)?;
     terminal.resize(Rect {
         x: 0,
         y: 0,
