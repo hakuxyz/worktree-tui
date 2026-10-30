@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod dialog;
 mod event;
 mod git;
 mod theme;

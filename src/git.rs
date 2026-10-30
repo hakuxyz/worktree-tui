@@ -69,6 +69,12 @@ impl Git {
             .collect())
     }
 
+    /// Create a new branch via `git branch <name>`.
+    pub async fn branch_create(&self, name: &str) -> Result<()> {
+        self.run(&["branch", name]).await?;
+        Ok(())
+    }
+
     /// Get current branch via `git branch --show-current`.
     pub async fn current_branch(&self) -> Result<String> {
         self.run(&["branch", "--show-current"]).await

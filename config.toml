@@ -70,6 +70,14 @@ key = "s"
 action = "switch_tab"
 
 [[keybindings]]
+key = "e"
+action = "open_in_editor"
+
+[[keybindings]]
+key = "b"
+action = "create_branch"
+
+[[keybindings]]
 key = "?"
 action = "help"
 

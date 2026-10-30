@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::dialog::Dialog;
 use crate::git::Git;
 use crossterm::event::{KeyEvent, KeyModifiers, MouseEvent, MouseButton, MouseEventKind};
 use std::collections::HashMap;
@@ -16,6 +17,9 @@ pub struct App {
     pub git_status: Option<GitStatus>,
     pub selected_index: usize,
     pub scroll_offset: usize,
+    pub search_query: String,
+    pub search_mode: bool,
+    pub dialog: Dialog,
     pub status_message: Option<StatusMessage>,
     pub pending_tasks: HashMap<TaskId, TaskStatus>,
     pub config: Config,
@@ -36,6 +40,9 @@ impl App {
             git_status: None,
             selected_index: 0,
             scroll_offset: 0,
+            search_query: String::new(),
+            search_mode: false,
+            dialog: Dialog::None,
             status_message: None,
             pending_tasks: HashMap::new(),
             config,
@@ -170,6 +177,55 @@ impl App {
         };
     }
 
+    /// Return worktrees filtered by the current search query.
+    pub fn filtered_worktrees(&self) -> Vec<&Worktree> {
+        if self.search_query.is_empty() {
+            return self.worktrees.iter().collect();
+        }
+        let q = self.search_query.to_lowercase();
+        self.worktrees
+            .iter()
+            .filter(|wt| {
+                wt.branch.to_lowercase().contains(&q)
+                    || wt.path.to_lowercase().contains(&q)
+                    || wt.commit.to_lowercase().contains(&q)
+            })
+            .collect()
+    }
+
+    /// Open the selected worktree's path in $EDITOR.
+    pub fn open_selected_in_editor(&self) -> Option<String> {
+        let wt = self.selected_worktree()?;
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+        Some(format!("{} {}", editor, wt.path))
+    }
+
+    /// Open a dialog to add a new worktree.
+    pub fn open_add_worktree_dialog(&mut self) {
+        self.dialog = Dialog::add_worktree();
+    }
+
+    /// Open a dialog to create a new branch.
+    pub fn open_create_branch_dialog(&mut self) {
+        self.dialog = Dialog::create_branch();
+    }
+
+    /// Close any open dialog.
+    pub fn close_dialog(&mut self) {
+        self.dialog = Dialog::None;
+    }
+
+    /// Toggle search mode (clear or focus).
+    pub fn toggle_search(&mut self) {
+        if self.search_query.is_empty() {
+            // search is already empty; nothing to toggle off
+        } else {
+            self.search_query.clear();
+            self.selected_index = 0;
+            self.scroll_offset = 0;
+        }
+    }
+
     pub fn handle_mouse(&mut self, mouse: MouseEvent) {
         match mouse.kind {
             MouseEventKind::ScrollUp => {
@@ -287,6 +343,11 @@ pub enum Action {
     SwitchTab,
     Help,
     Back,
+    OpenInEditor,
+    CreateBranch,
+    ConfirmAddWorktree,
+    ToggleSearch,
+    ClearSearch,
     Unknown,
 }
 
@@ -311,6 +372,11 @@ impl From<&str> for Action {
             "switch_tab" => Action::SwitchTab,
             "help" => Action::Help,
             "back" => Action::Back,
+            "open_in_editor" => Action::OpenInEditor,
+            "create_branch" => Action::CreateBranch,
+            "confirm_add_worktree" => Action::ConfirmAddWorktree,
+            "toggle_search" => Action::ToggleSearch,
+            "clear_search" => Action::ClearSearch,
             _ => Action::Unknown,
         }
     }
@@ -349,12 +415,17 @@ impl InputHandler {
             Action::GoBottom => app.go_bottom(),
             Action::Select => {}
             Action::Toggle => {}
-            Action::AddWorktree => {}
+            Action::AddWorktree => app.open_add_worktree_dialog(),
             Action::RemoveWorktree => {}
             Action::Refresh => {}
             Action::SwitchTab => app.toggle_tab(),
             Action::Help => app.show_help = !app.show_help,
-            Action::Back => {}
+            Action::Back => app.close_dialog(),
+            Action::OpenInEditor => {}
+            Action::CreateBranch => app.open_create_branch_dialog(),
+            Action::ConfirmAddWorktree => app.open_add_worktree_dialog(),
+            Action::ToggleSearch => app.toggle_search(),
+            Action::ClearSearch => app.search_query.clear(),
             Action::Unknown => {}
         }
     }

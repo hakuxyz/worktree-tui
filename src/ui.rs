@@ -1,13 +1,30 @@
 use crate::app::{App, Tab, Worktree};
+use crate::dialog::{Dialog, InputField};
 use crate::theme::{Theme, palette};
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, BorderType};
+use ratatui::widgets::{
+    Block, Borders, List, ListItem, ListState, Paragraph, Tabs, BorderType, Clear,
+};
 use ratatui::Frame;
 
 pub fn draw(frame: &mut Frame, app: &App, theme: &Theme) {
+    let area = frame.area();
+
+    // If a dialog is open, dim the background and render the dialog on top.
+    if !matches!(app.dialog, Dialog::None) {
+        // Draw the normal UI first (dimmed via Clear is not needed; we just overlay).
+        draw_frame(frame, app, theme);
+        draw_dialog(frame, app, theme, area);
+        return;
+    }
+
+    draw_frame(frame, app, theme);
+}
+
+fn draw_frame(frame: &mut Frame, app: &App, theme: &Theme) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -82,23 +99,28 @@ fn draw_body(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 }
 
 fn draw_worktree_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
+    let filtered = app.filtered_worktrees();
+    let title = if app.search_query.is_empty() {
+        format!(" Worktrees ({})", filtered.len())
+    } else {
+        format!(" Search: '{}' ({})", app.search_query, filtered.len())
+    };
+
     let block = Block::default()
         .title(Line::from(vec![
-            Span::styled(" Worktrees ", theme.title),
-            Span::styled(format!(" ({})", app.worktrees.len()), theme.muted),
+            Span::styled(&title, theme.title),
         ]))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .style(theme.surface)
         .border_style(theme.active);
 
-    let items: Vec<ListItem> = app
-        .visible_worktrees()
+    let items: Vec<ListItem> = filtered
+        .iter()
         .enumerate()
         .map(|(i, wt)| {
-            let absolute = app.scroll_offset + i;
-            let selected = absolute == app.selected_index;
-            let style = if selected {
+            let is_selected = i == app.selected_index;
+            let style = if is_selected {
                 theme.selected
             } else if wt.is_main {
                 theme.success
@@ -131,8 +153,9 @@ fn draw_worktree_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
         .collect();
 
     let mut list_state = ListState::default();
-    if !app.worktrees.is_empty() {
-        list_state.select(Some(app.selected_index.saturating_sub(app.scroll_offset)));
+    if !filtered.is_empty() {
+        let sel = app.selected_index.min(filtered.len().saturating_sub(1));
+        list_state.select(Some(sel));
     }
 
     let list = List::new(items)
@@ -175,7 +198,7 @@ fn draw_details_panel(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
                 Line::from(Span::styled("Ahead:   ", theme.muted) + Span::styled(wt.ahead.to_string(), theme.success)),
                 Line::from(Span::styled("Behind:  ", theme.muted) + Span::styled(wt.behind.to_string(), theme.warning)),
                 Line::from(""),
-                Line::from(Span::styled("Press Enter to open in $EDITOR", theme.muted)),
+                Line::from(Span::styled("Enter: open in $EDITOR", theme.muted)),
             ]
         }
         None => {
@@ -223,7 +246,7 @@ fn draw_branch_list(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
     let mut list_state = ListState::default();
     if !app.branches.is_empty() {
-        list_state.select(Some(app.selected_index));
+        list_state.select(Some(app.selected_index.min(app.branches.len().saturating_sub(1))));
     }
 
     let list = List::new(items)
@@ -291,9 +314,9 @@ fn draw_status_panel(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
 
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let help = if app.show_help {
-        " q:quit  j/k:move  g/G:top-bottom  ?:help  a:add  d:remove  r:refresh  s:tab  Esc:back "
+        " q:quit  j/k:move  g/G:top-bottom  ?:help  a:add  d:remove  r:refresh  s:tab  e:editor  /:search  b:branch "
     } else {
-        " q:quit  j/k:move  ?:help  s:switch tab "
+        " q:quit  j/k:move  ?:help  s:switch tab  e:editor  /:search "
     };
 
     let status_text = match &app.status_message {
@@ -324,4 +347,128 @@ fn draw_footer(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) {
     let paragraph = Paragraph::new(Line::from(Span::styled(status_text, theme.muted)))
         .alignment(Alignment::Left);
     frame.render_widget(paragraph, inner);
+}
+
+/// Render a modal dialog overlay.
+fn draw_dialog(frame: &mut Frame, app: &App, theme: &Theme, area: Rect) {
+    // Dim background with a clear block.
+    let clear = Clear;
+    frame.render_widget(clear, area);
+
+    match &app.dialog {
+        Dialog::AddWorktree(dlg) => {
+            let width = 60.min(area.width.saturating_sub(4));
+            let height = 12;
+            let x = area.x + (area.width.saturating_sub(width)) / 2;
+            let y = area.y + (area.height.saturating_sub(height)) / 2;
+            let dialog_area = Rect { x, y, width, height };
+
+            let block = Block::default()
+                .title(Line::from(vec![Span::styled(" Add Worktree ", theme.title)]))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(theme.surface)
+                .border_style(theme.active);
+
+            let inner = dialog_area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            });
+
+            let path_label = if matches!(dlg.field, InputField::Path) {
+                Span::styled("Path:  ", theme.muted) + Span::styled(&dlg.path, theme.text).bold()
+            } else {
+                Span::styled("Path:  ", theme.muted) + Span::styled(&dlg.path, theme.text)
+            };
+            let branch_label = if matches!(dlg.field, InputField::Branch) {
+                Span::styled("Branch:", theme.muted) + Span::styled(&dlg.branch, theme.text).bold()
+            } else {
+                Span::styled("Branch:", theme.muted) + Span::styled(&dlg.branch, theme.text)
+            };
+
+            let mut lines = vec![
+                Line::from(""),
+                Line::from(path_label),
+                Line::from(branch_label),
+                Line::from(""),
+                Line::from(Span::styled("Tab: switch field  Enter: create  Esc: cancel", theme.muted)),
+            ];
+            if let Some(err) = &dlg.error {
+                lines.insert(1, Line::from(Span::styled(err, theme.error)));
+            }
+
+            frame.render_widget(block, dialog_area);
+            let paragraph = Paragraph::new(lines).alignment(Alignment::Left);
+            frame.render_widget(paragraph, inner);
+        }
+        Dialog::CreateBranch(dlg) => {
+            let width = 50.min(area.width.saturating_sub(4));
+            let height = 10;
+            let x = area.x + (area.width.saturating_sub(width)) / 2;
+            let y = area.y + (area.height.saturating_sub(height)) / 2;
+            let dialog_area = Rect { x, y, width, height };
+
+            let block = Block::default()
+                .title(Line::from(vec![Span::styled(" Create Branch ", theme.title)]))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(theme.surface)
+                .border_style(theme.active);
+
+            let inner = dialog_area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            });
+
+            let branch_label = Span::styled("Name: ", theme.muted)
+                + Span::styled(&dlg.name, theme.text);
+
+            let mut lines = vec![
+                Line::from(""),
+                Line::from(branch_label),
+                Line::from(""),
+                Line::from(Span::styled("Enter: create  Esc: cancel", theme.muted)),
+            ];
+            if let Some(err) = &dlg.error {
+                lines.insert(1, Line::from(Span::styled(err, theme.error)));
+            }
+
+            frame.render_widget(block, dialog_area);
+            let paragraph = Paragraph::new(lines).alignment(Alignment::Left);
+            frame.render_widget(paragraph, inner);
+        }
+        Dialog::ConfirmRemove(path) => {
+            let width = 50.min(area.width.saturating_sub(4));
+            let height = 9;
+            let x = area.x + (area.width.saturating_sub(width)) / 2;
+            let y = area.y + (area.height.saturating_sub(height)) / 2;
+            let dialog_area = Rect { x, y, width, height };
+
+            let block = Block::default()
+                .title(Line::from(vec![Span::styled(" Remove Worktree ", theme.title)]))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .style(theme.surface)
+                .border_style(theme.warning);
+
+            let inner = dialog_area.inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            });
+
+            let lines = vec![
+                Line::from(""),
+                Line::from(Span::styled("Remove worktree?", theme.text)),
+                Line::from(Span::styled(path, theme.muted)),
+                Line::from(""),
+                Line::from(Span::styled("y: confirm  n/Esc: cancel", theme.muted)),
+            ];
+
+            frame.render_widget(block, dialog_area);
+            let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
+            frame.render_widget(paragraph, inner);
+        }
+        Dialog::RenameBranch(_) => {}
+        Dialog::None => {}
+    }
 }

@@ -54,6 +54,8 @@ impl Default for Config {
                 KeyBinding::new("d", "remove_worktree"),
                 KeyBinding::new("r", "refresh"),
                 KeyBinding::new("s", "switch_tab"),
+                KeyBinding::new("e", "open_in_editor"),
+                KeyBinding::new("b", "create_branch"),
                 KeyBinding::new("?", "help"),
                 KeyBinding::new("Esc", "back"),
             ],

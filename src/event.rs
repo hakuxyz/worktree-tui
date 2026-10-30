@@ -1,4 +1,6 @@
 use crate::app::{Action, App, InputHandler};
+use crate::config::Config;
+use crate::dialog::Dialog;
 use crate::git::Git;
 use crate::theme::Theme;
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind, MouseEvent};
@@ -8,8 +10,10 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{stdout, Stdout};
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::process::Command;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -136,8 +140,47 @@ impl EventLoop {
                 }
                 AppEvent::Key(key) => {
                     if key.code == crossterm::event::KeyCode::Char('q') {
+                        // Quit even from dialogs
                         break;
                     }
+                    // If a dialog is open, route keys to dialog input
+                    if !matches!(app.dialog, Dialog::None) {
+                        self.handle_dialog_key(&mut app, key);
+                        continue;
+                    }
+                    // If in search mode, route keys to search input
+                    if app.search_mode {
+                        match key.code {
+                            crossterm::event::KeyCode::Esc => {
+                                app.search_mode = false;
+                                app.search_query.clear();
+                                app.selected_index = 0;
+                                app.scroll_offset = 0;
+                            }
+                            crossterm::event::KeyCode::Enter => {
+                                app.search_mode = false;
+                                app.selected_index = 0;
+                                app.scroll_offset = 0;
+                            }
+                            crossterm::event::KeyCode::Backspace => {
+                                app.search_query.pop();
+                            }
+                            crossterm::event::KeyCode::Char(c) => {
+                                app.search_query.push(c);
+                                app.selected_index = 0;
+                                app.scroll_offset = 0;
+                            }
+                            _ => {}
+                        }
+                        continue;
+                    }
+
+                    // '/' enters search mode
+                    if key.code == crossterm::event::KeyCode::Char('/') {
+                        app.search_mode = true;
+                        continue;
+                    }
+
                     let action = handler.handle_key(key);
                     if matches!(action, Action::Quit | Action::QuitForce) {
                         break;
@@ -254,32 +297,8 @@ async fn handle_action(
                 Ok(())
             }
             Action::RemoveWorktree => {
-                let path = app.selected_worktree().map(|wt| wt.path.clone());
-                if let Some(path) = path {
-                    let id = app.add_task();
-                    let git_inner = git.clone();
-                    let tx = self.tx.clone();
-                    tokio::spawn(async move {
-                        if let Some(git) = git_inner {
-                            let git = git.lock().await;
-                            match git.worktree_remove(&path).await {
-                                Ok(()) => {
-                                    let _ = tx.send(AppEvent::GitTaskDone {
-                                        id,
-                                        success: true,
-                                        message: format!("removed {}", path),
-                                    });
-                                }
-                                Err(e) => {
-                                    let _ = tx.send(AppEvent::GitTaskDone {
-                                        id,
-                                        success: false,
-                                        message: format!("remove failed: {}", e),
-                                    });
-                                }
-                            }
-                        }
-                    });
+                if let Some(wt) = app.selected_worktree() {
+                    app.dialog = Dialog::ConfirmRemove(wt.path.clone());
                 }
                 Ok(())
             }
@@ -315,7 +334,217 @@ async fn handle_action(
                 Ok(())
             }
             Action::Back => Ok(()),
+            Action::OpenInEditor => {
+                if let Some(cmd) = app.open_selected_in_editor() {
+                    let id = app.add_task();
+                    let tx = self.tx.clone();
+                    tokio::spawn(async move {
+                        let parts: Vec<&str> = cmd.splitn(2, ' ').collect();
+                        if let Some(editor) = parts.first() {
+                            let args: Vec<&str> = parts.get(1).unwrap_or(&"").split_whitespace().collect();
+                            match Command::new(editor).args(&args).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+                                Ok(_) => {
+                                    let _ = tx.send(AppEvent::GitTaskDone {
+                                        id,
+                                        success: true,
+                                        message: "opened in editor".into(),
+                                    });
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(AppEvent::GitTaskDone {
+                                        id,
+                                        success: false,
+                                        message: format!("editor failed: {}", e),
+                                    });
+                                }
+                            }
+                        }
+                    });
+                }
+                Ok(())
+            }
+            Action::ConfirmAddWorktree => {
+                app.open_add_worktree_dialog();
+                Ok(())
+            }
+            Action::CreateBranch => {
+                app.open_create_branch_dialog();
+                Ok(())
+            }
+            Action::ToggleSearch => {
+                if !app.search_mode {
+                    app.search_mode = true;
+                }
+                Ok(())
+            }
+            Action::ClearSearch => {
+                app.search_query.clear();
+                app.selected_index = 0;
+                app.scroll_offset = 0;
+                Ok(())
+            }
             Action::Unknown => Ok(()),
+        }
+    }
+
+    /// Handle key input when a dialog is open.
+    fn handle_dialog_key(&self, app: &mut App, key: KeyEvent) {
+        match &mut app.dialog {
+            Dialog::AddWorktree(dlg) => {
+                match key.code {
+                    crossterm::event::KeyCode::Esc => {
+                        app.close_dialog();
+                    }
+                    crossterm::event::KeyCode::Enter => {
+                        let path = dlg.path.clone();
+                        let branch = dlg.branch.clone();
+                        app.close_dialog();
+                        if !path.is_empty() && !branch.is_empty() {
+                            let id = app.add_task();
+                            let git_inner = self.git.clone();
+                            let tx = self.tx.clone();
+                            tokio::spawn(async move {
+                                if let Some(git) = git_inner {
+                                    let git = git.lock().await;
+                                    match git.worktree_add(&path, &branch).await {
+                                        Ok(()) => {
+                                            let _ = tx.send(AppEvent::GitTaskDone {
+                                                id,
+                                                success: true,
+                                                message: format!("added worktree {}", path),
+                                            });
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(AppEvent::GitTaskDone {
+                                                id,
+                                                success: false,
+                                                message: format!("add failed: {}", e),
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    crossterm::event::KeyCode::Tab => {
+                        dlg.field = match dlg.field {
+                            crate::dialog::InputField::Path => crate::dialog::InputField::Branch,
+                            crate::dialog::InputField::Branch => crate::dialog::InputField::Path,
+                        };
+                    }
+                    crossterm::event::KeyCode::Backspace => {
+                        match dlg.field {
+                            crate::dialog::InputField::Path => {
+                                dlg.path.pop();
+                            }
+                            crate::dialog::InputField::Branch => {
+                                dlg.branch.pop();
+                            }
+                        }
+                    }
+                    crossterm::event::KeyCode::Char(c) => {
+                        match dlg.field {
+                            crate::dialog::InputField::Path => {
+                                dlg.path.push(c);
+                            }
+                            crate::dialog::InputField::Branch => {
+                                dlg.branch.push(c);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Dialog::CreateBranch(dlg) => {
+                match key.code {
+                    crossterm::event::KeyCode::Esc => {
+                        app.close_dialog();
+                    }
+                    crossterm::event::KeyCode::Enter => {
+                        let name = dlg.name.clone();
+                        app.close_dialog();
+                        if !name.is_empty() {
+                            let id = app.add_task();
+                            let git_inner = self.git.clone();
+                            let tx = self.tx.clone();
+                            tokio::spawn(async move {
+                                if let Some(git) = git_inner {
+                                    let git = git.lock().await;
+                                    match git.branch_create(&name).await {
+                                        Ok(()) => {
+                                            let _ = tx.send(AppEvent::GitTaskDone {
+                                                id,
+                                                success: true,
+                                                message: format!("created branch {}", name),
+                                            });
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(AppEvent::GitTaskDone {
+                                                id,
+                                                success: false,
+                                                message: format!("branch create failed: {}", e),
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    crossterm::event::KeyCode::Backspace => {
+                        dlg.name.pop();
+                    }
+                    crossterm::event::KeyCode::Char(c) => {
+                        dlg.name.push(c);
+                    }
+                    _ => {}
+                }
+            }
+            Dialog::RenameBranch(_) => {
+                match key.code {
+                    crossterm::event::KeyCode::Esc => {
+                        app.close_dialog();
+                    }
+                    _ => {}
+                }
+            }
+            Dialog::ConfirmRemove(_) => {
+                match key.code {
+                    crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('n') => {
+                        app.close_dialog();
+                    }
+                    crossterm::event::KeyCode::Char('y') => {
+                        if let Dialog::ConfirmRemove(path) = app.dialog.clone() {
+                            app.close_dialog();
+                            let id = app.add_task();
+                            let git_inner = self.git.clone();
+                            let tx = self.tx.clone();
+                            tokio::spawn(async move {
+                                if let Some(git) = git_inner {
+                                    let git = git.lock().await;
+                                    match git.worktree_remove(&path).await {
+                                        Ok(()) => {
+                                            let _ = tx.send(AppEvent::GitTaskDone {
+                                                id,
+                                                success: true,
+                                                message: format!("removed {}", path),
+                                            });
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(AppEvent::GitTaskDone {
+                                                id,
+                                                success: false,
+                                                message: format!("remove failed: {}", e),
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Dialog::None => {}
         }
     }
 

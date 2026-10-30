@@ -49,9 +49,13 @@ Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/r
 | Responsive terminal resize | ✅ |
 | Mouse support (click to select, scroll) | ✅ |
 | Multi-tab navigation (Worktrees / Branches / Status) | ✅ |
+| Search/filter worktrees (`/`) | ✅ |
 | Git worktree list (`git worktree list --porcelain`) | ✅ |
-| Git worktree remove (`git worktree remove`) | ✅ |
-| Git worktree add (manual + refresh) | ✅ |
+| Git worktree add (interactive dialog) | ✅ |
+| Git worktree remove (confirmation dialog) | ✅ |
+| Git worktree refresh | ✅ |
+| Open worktree in `$EDITOR` (`e`) | ✅ |
+| Create branch (interactive dialog) | ✅ |
 | Branch browser tab | ✅ |
 | Git status tab | ✅ |
 | Custom themes (load from config.toml) | ✅ |
@@ -68,14 +72,17 @@ Built with [Rust](https://rust-lang.org), [ratatui](https://github.com/ratatui/r
 | `h` / `l` | Move focus left / right |
 | `J` / `K` | Page down / up |
 | `g` / `G` | Go to top / bottom |
-| `Enter` | Select worktree |
+| `Enter` | Select worktree / confirm dialog |
 | `Space` | Toggle selection |
-| `a` | Add new worktree (placeholder) |
-| `d` | Remove selected worktree |
+| `a` | Open add worktree dialog |
+| `d` | Remove worktree (confirmation dialog) |
 | `r` | Refresh worktree list from git |
 | `s` | Switch tab |
+| `e` | Open selected worktree in $EDITOR |
+| `b` | Create new branch dialog |
 | `?` | Toggle help overlay |
-| `Esc` | Back / cancel |
+| `Esc` | Back / cancel / close dialog |
+| `/` | Enter search mode (type to filter) |
 | Mouse click | Select worktree in list |
 | Mouse scroll | Scroll worktree list |
 
@@ -278,9 +285,13 @@ The UI runs on a dedicated tokio task. Crossterm events (key, mouse, resize) are
 - [x] Catppuccin theme & responsive layout
 - [x] TOML keybinding configuration
 - [x] Worktree list + details panels
+- [x] Search/filter worktrees (`/`)
 - [x] Git worktree list (`git worktree list --porcelain`)
-- [x] Git worktree remove (`git worktree remove`)
-- [x] Git worktree add (placeholder + refresh)
+- [x] Git worktree add (interactive dialog)
+- [x] Git worktree remove (confirmation dialog)
+- [x] Git worktree refresh
+- [x] Open worktree in `$EDITOR`
+- [x] Create branch (interactive dialog)
 - [x] Mouse support (click to select, scroll)
 - [x] Branch browser tab
 - [x] Git status tab
